@@ -1,36 +1,87 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ⚖️ NyayGuru — India's First Legal AI Chatbot
 
-## Getting Started
+An AI-powered legal assistance platform for Indian law built with Next.js 14, TypeScript, and Tailwind CSS.
 
-First, run the development server:
+## ✨ Features
+
+- 🤖 **AI Legal Chat** — Ask legal questions and get instant, structured answers with Act/Section references and case law citations
+- 📄 **Document OCR** — Upload legal documents for analysis (UI ready)
+- 🌐 **Multi-Language** — Hindi, English, Tamil, Telugu, Kannada, Marathi, Malayalam, and more
+- 🎙️ **Voice Input** — Speak your queries naturally (UI ready)
+- 🏛️ **Case Citations** — Supreme Court & High Court judgment references
+- 🔒 **Privacy First** — Confidential, encrypted, no data sharing
+- 📝 **Legal Drafting** — Help with notices, complaints, NDAs, contracts
+- 🎨 **Dark/Light Mode** — Automatic theme support
+- 📱 **Fully Responsive** — Works on all devices
+
+## 🚀 Getting Started
+
+### Prerequisites
+- Node.js 20+
+- npm
+
+### Installation
+
+```bash
+# Install dependencies
+npm install
+
+# Create environment file (already created)
+# Edit .env.local and add your OpenAI API key
+```
+
+### Environment Variables
+
+Edit `.env.local`:
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-4o-mini
+```
+
+> **Note:** The app works without an API key using built-in demo responses. Add your OpenAI key for full AI-powered answers.
+
+### Run Development Server
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 📂 Project Structure
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```
+src/
+├── app/
+│   ├── api/chat/       — Chat API route (OpenAI integration)
+│   ├── auth/login/     — Login page
+│   ├── auth/signup/    — Signup page
+│   ├── chat/           — AI chat interface
+│   ├── globals.css     — Global styles & CSS variables
+│   ├── layout.tsx      — Root layout with Navbar & Footer
+│   └── page.tsx        — Landing page
+├── components/
+│   ├── Navbar.tsx          — Navigation bar
+│   ├── Footer.tsx          — Site footer
+│   ├── HeroSection.tsx     — Landing hero
+│   ├── FeaturesSection.tsx — Features grid
+│   ├── HowItWorksSection.tsx — 3-step process
+│   ├── TestimonialsSection.tsx — User reviews
+│   ├── PricingSection.tsx  — Free plan details
+│   ├── FAQSection.tsx      — Accordion FAQ
+│   └── CTASection.tsx      — Call to action
+```
 
-## Learn More
+## 🛠️ Tech Stack
 
-To learn more about Next.js, take a look at the following resources:
+| Technology | Purpose |
+|---|---|
+| Next.js 14 | React framework (App Router) |
+| TypeScript | Type safety |
+| Tailwind CSS v4 | Styling |
+| Lucide React | Icons |
+| OpenAI API | AI chat backend |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 📄 License
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is private and proprietary.
