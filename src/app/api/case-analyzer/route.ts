@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const apiKey = process.env.OPENAI_API_KEY;
+    const apiKey = process.env.GEMINI_API_KEY;
 
     if (!apiKey) {
       return NextResponse.json(generateDemoAnalysis(caseType, clientSide, court));
@@ -127,39 +127,81 @@ CONFIGURATION:
 
 Analyze this case completely and return the JSON response.`;
 
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        messages: [
-          { role: "system", content: CASE_ANALYZER_PROMPT },
-          { role: "user", content: userMessage },
-        ],
-        temperature: 0.4,
-        max_tokens: 8192,
-        response_format: { type: "json_object" },
-      }),
-    });
+    // Try multiple models in order (fallback on rate limit)
+    const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelsToTry = [
+      primaryModel,
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+    ].filter((m, i, arr) => arr.indexOf(m) === i); // deduplicate
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error("OpenAI API error:", error);
-      return NextResponse.json(generateDemoAnalysis(caseType, clientSide, court));
+    let lastError = "";
+
+    for (const model of modelsToTry) {
+      console.log(`Case Analyzer — trying Gemini model: ${model}`);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [
+              {
+                role: "user",
+                parts: [
+                  {
+                    text: `${CASE_ANALYZER_PROMPT}\n\n---\n\n${userMessage}`,
+                  },
+                ],
+              },
+            ],
+            generationConfig: {
+              temperature: 0.4,
+              maxOutputTokens: 8192,
+              responseMimeType: "application/json",
+            },
+          }),
+        }
+      );
+
+      if (response.status === 429) {
+        lastError = `Rate limit hit for ${model}`;
+        console.warn(lastError, "— trying next model...");
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+
+      if (!response.ok) {
+        lastError = await response.text();
+        console.error(`Gemini API error (${model}):`, lastError);
+        continue;
+      }
+
+      const data = await response.json();
+      const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!content) {
+        console.error(`Gemini (${model}) returned no content:`, JSON.stringify(data));
+        continue;
+      }
+
+      try {
+        // Clean any markdown code fences Gemini might add
+        const cleaned = content.replace(/```json\n?|```\n?/g, "").trim();
+        const parsed = JSON.parse(cleaned);
+        return NextResponse.json(parsed);
+      } catch {
+        console.error(`Failed to parse Gemini (${model}) response:`, content);
+        continue;
+      }
     }
 
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content;
-
-    try {
-      const parsed = JSON.parse(content);
-      return NextResponse.json(parsed);
-    } catch {
-      return NextResponse.json(generateDemoAnalysis(caseType, clientSide, court));
-    }
+    // All models failed — return demo with a flag so frontend knows
+    console.error("All Gemini models failed. Last error:", lastError);
+    const demo = generateDemoAnalysis(caseType, clientSide, court);
+    return NextResponse.json({ ...demo, _isDemo: true, _error: "AI service is temporarily rate-limited. Showing sample analysis. Please wait a minute and try again." });
   } catch (error) {
     console.error("Case analyzer error:", error);
     return NextResponse.json(

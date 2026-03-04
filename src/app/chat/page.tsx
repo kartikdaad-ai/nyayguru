@@ -72,10 +72,17 @@ export default function ChatPage() {
 
       const data = await res.json();
 
+      let content: string;
+      if (!res.ok || data.error) {
+        content = `⚠️ ${data.error || "Failed to get AI response. Please try again in a moment."}`;
+      } else {
+        content = data.message || "I apologize, but I could not process your request. Please try again.";
+      }
+
       const assistantMessage: Message = {
         id: (Date.now() + 1).toString(),
         role: "assistant",
-        content: data.message || "I apologize, but I could not process your request. Please try again.",
+        content,
         timestamp: new Date(),
       };
 
@@ -85,7 +92,7 @@ export default function ChatPage() {
         id: (Date.now() + 1).toString(),
         role: "assistant",
         content:
-          "⚠️ Sorry, there was an error processing your request. Please check your API configuration and try again.",
+          "⚠️ Network error. Please check your internet connection and try again.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);

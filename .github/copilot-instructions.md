@@ -5,7 +5,7 @@
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS v4
 - **Icons**: Lucide React
-- **AI Backend**: OpenAI API (configurable)
+- **AI Backend**: Google Gemini API (free tier)
 
 ## Project Structure
 - `src/app/` — App Router pages and layouts
@@ -35,5 +35,5 @@
 - Voice input support (UI ready)
 
 ## Environment Variables
-- `OPENAI_API_KEY` — OpenAI API key for AI responses
-- `OPENAI_MODEL` — Model to use (default: gpt-4o-mini)
+- `GEMINI_API_KEY` — Google Gemini API key for AI responses (free at https://aistudio.google.com/apikey)
+- `GEMINI_MODEL` — Model to use (default: gemini-2.0-flash)

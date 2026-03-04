@@ -44,8 +44,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Check for API key
-    const apiKey = process.env.OPENAI_API_KEY;
-    
+    const apiKey = process.env.GEMINI_API_KEY;
+
     if (!apiKey) {
       // Return a helpful demo response if no API key is configured
       const lastMessage = messages[messages.length - 1]?.content || "";
@@ -54,37 +54,91 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Call OpenAI API
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${apiKey}`,
+    // Build Gemini conversation history
+    const geminiContents = [
+      {
+        role: "user",
+        parts: [{ text: SYSTEM_PROMPT }],
       },
-      body: JSON.stringify({
-        model: process.env.OPENAI_MODEL || "gpt-4o-mini",
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          ...messages,
+      {
+        role: "model",
+        parts: [
+          {
+            text: "Understood. I am NyayGuru, India's AI legal assistant. I will follow all the guidelines you've provided. How can I help you today?",
+          },
         ],
-        temperature: 0.7,
-        max_tokens: 2048,
-      }),
-    });
+      },
+      ...messages.map(
+        (msg: { role: string; content: string }) => ({
+          role: msg.role === "assistant" ? "model" : "user",
+          parts: [{ text: msg.content }],
+        })
+      ),
+    ];
 
-    if (!response.ok) {
-      const error = await response.json();
-      console.error("OpenAI API error:", error);
-      return NextResponse.json(
-        { error: "Failed to get AI response" },
-        { status: 500 }
+    // Try multiple models in order (fallback on rate limit)
+    const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+    const modelsToTry = [
+      primaryModel,
+      "gemini-2.5-flash",
+      "gemini-2.0-flash",
+      "gemini-2.0-flash-lite",
+    ].filter((m, i, arr) => arr.indexOf(m) === i); // deduplicate
+
+    let lastError = "";
+
+    for (const model of modelsToTry) {
+      console.log(`Trying Gemini model: ${model}`);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: geminiContents,
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 2048,
+            },
+          }),
+        }
       );
+
+      if (response.status === 429) {
+        lastError = `Rate limit hit for ${model}`;
+        console.warn(lastError, "— trying next model...");
+        // Small delay before trying next model
+        await new Promise((r) => setTimeout(r, 1000));
+        continue;
+      }
+
+      if (!response.ok) {
+        lastError = await response.text();
+        console.error(`Gemini API error (${model}):`, lastError);
+        continue;
+      }
+
+      const data = await response.json();
+      const aiMessage = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+      if (!aiMessage) {
+        console.error(`Gemini (${model}) returned no content:`, JSON.stringify(data));
+        continue;
+      }
+
+      return NextResponse.json({ message: aiMessage });
     }
 
-    const data = await response.json();
-    const aiMessage = data.choices?.[0]?.message?.content;
-
-    return NextResponse.json({ message: aiMessage });
+    // All models failed
+    console.error("All Gemini models failed. Last error:", lastError);
+    return NextResponse.json(
+      {
+        error:
+          "AI service is temporarily rate-limited. Please wait a minute and try again.",
+      },
+      { status: 429 }
+    );
   } catch (error) {
     console.error("Chat API error:", error);
     return NextResponse.json(
@@ -232,7 +286,7 @@ I'm here to help you understand Indian law. Here's what I can assist you with:
 2. Mention the state/city if relevant (state-specific laws vary)
 3. Ask follow-up questions for clarity
 
-> 💡 **Tip**: To get a more detailed answer, please configure your OpenAI API key in the \`.env.local\` file. See the README for instructions.
+> 💡 **Tip**: To get AI-powered answers, get your FREE Gemini API key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey) and add it to your \`.env.local\` file.
 
 ⚠️ Disclaimer: This information is for general guidance and educational purposes only. It does not constitute formal legal advice. Please consult a qualified advocate for your specific situation.`;
 }
