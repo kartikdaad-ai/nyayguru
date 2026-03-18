@@ -111,8 +111,9 @@ export async function POST(request: NextRequest) {
     }
 
     const apiKey = process.env.GEMINI_API_KEY;
+    const mistralApiKey = process.env.MISTRAL_API_KEY;
 
-    if (!apiKey) {
+    if (!apiKey && !mistralApiKey) {
       return NextResponse.json(generateDemoAnalysis(caseType, clientSide, court));
     }
 
@@ -126,6 +127,48 @@ CONFIGURATION:
 - Court Level: ${court}
 
 Analyze this case completely and return the JSON response.`;
+
+    // If only Mistral key is available (no Gemini), skip straight to Mistral
+    if (!apiKey && mistralApiKey) {
+      console.log("No Gemini key — using Mistral AI for case analysis");
+      const mistralModel = process.env.MISTRAL_MODEL || "mistral-small-latest";
+
+      const mistralRes = await fetch(
+        "https://api.mistral.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mistralApiKey}`,
+          },
+          body: JSON.stringify({
+            model: mistralModel,
+            messages: [
+              { role: "system", content: CASE_ANALYZER_PROMPT },
+              { role: "user", content: userMessage },
+            ],
+            temperature: 0.4,
+            max_tokens: 8192,
+            response_format: { type: "json_object" },
+          }),
+        }
+      );
+
+      if (mistralRes.ok) {
+        const data = await mistralRes.json();
+        const content = data.choices?.[0]?.message?.content;
+        if (content) {
+          try {
+            const cleaned = content.replace(/```json\n?|```\n?/g, "").trim();
+            return NextResponse.json(JSON.parse(cleaned));
+          } catch {
+            console.error("Failed to parse Mistral response");
+          }
+        }
+      }
+
+      return NextResponse.json(generateDemoAnalysis(caseType, clientSide, court));
+    }
 
     // Try multiple models in order (fallback on rate limit)
     const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash";
@@ -198,8 +241,62 @@ Analyze this case completely and return the JSON response.`;
       }
     }
 
-    // All models failed — return demo with a flag so frontend knows
-    console.error("All Gemini models failed. Last error:", lastError);
+    // All Gemini models failed — try Mistral as fallback
+    const mistralKey = process.env.MISTRAL_API_KEY;
+    if (mistralKey) {
+      console.log("All Gemini models failed. Falling back to Mistral AI for case analysis...");
+
+      const mistralModel = process.env.MISTRAL_MODEL || "mistral-small-latest";
+
+      try {
+        const mistralRes = await fetch(
+          "https://api.mistral.ai/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mistralKey}`,
+            },
+            body: JSON.stringify({
+              model: mistralModel,
+              messages: [
+                { role: "system", content: CASE_ANALYZER_PROMPT },
+                { role: "user", content: userMessage },
+              ],
+              temperature: 0.4,
+              max_tokens: 8192,
+              response_format: { type: "json_object" },
+            }),
+          }
+        );
+
+        if (mistralRes.ok) {
+          const mistralData = await mistralRes.json();
+          const mistralContent =
+            mistralData.choices?.[0]?.message?.content;
+          if (mistralContent) {
+            try {
+              const cleaned = mistralContent
+                .replace(/```json\n?|```\n?/g, "")
+                .trim();
+              const parsed = JSON.parse(cleaned);
+              console.log(`Mistral (${mistralModel}) case analysis succeeded`);
+              return NextResponse.json(parsed);
+            } catch {
+              console.error("Failed to parse Mistral response:", mistralContent);
+            }
+          }
+        } else {
+          const errText = await mistralRes.text();
+          console.error("Mistral API error:", errText);
+        }
+      } catch (mistralErr) {
+        console.error("Mistral fallback failed:", mistralErr);
+      }
+    }
+
+    // All providers failed — return demo with a flag
+    console.error("All AI providers failed. Last error:", lastError);
     const demo = generateDemoAnalysis(caseType, clientSide, court);
     return NextResponse.json({ ...demo, _isDemo: true, _error: "AI service is temporarily rate-limited. Showing sample analysis. Please wait a minute and try again." });
   } catch (error) {

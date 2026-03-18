@@ -5,7 +5,7 @@
 - **Language**: TypeScript
 - **Styling**: Tailwind CSS v4
 - **Icons**: Lucide React
-- **AI Backend**: Google Gemini API (free tier)
+- **AI Backend**: Google Gemini API (free tier) + Mistral AI (fallback)
 
 ## Project Structure
 - `src/app/` — App Router pages and layouts
@@ -36,4 +36,6 @@
 
 ## Environment Variables
 - `GEMINI_API_KEY` — Google Gemini API key for AI responses (free at https://aistudio.google.com/apikey)
-- `GEMINI_MODEL` — Model to use (default: gemini-2.0-flash)
+- `GEMINI_MODEL` — Model to use (default: gemini-2.5-flash)
+- `MISTRAL_API_KEY` — Mistral AI API key as fallback provider (free at https://console.mistral.ai/api-keys)
+- `MISTRAL_MODEL` — Mistral model to use (default: mistral-small-latest)

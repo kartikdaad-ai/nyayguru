@@ -43,15 +43,57 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check for API key
+    // Check for API keys
     const apiKey = process.env.GEMINI_API_KEY;
+    const mistralApiKey = process.env.MISTRAL_API_KEY;
 
-    if (!apiKey) {
-      // Return a helpful demo response if no API key is configured
+    if (!apiKey && !mistralApiKey) {
+      // Return a helpful demo response if no API keys are configured
       const lastMessage = messages[messages.length - 1]?.content || "";
       return NextResponse.json({
         message: generateDemoResponse(lastMessage),
       });
+    }
+
+    // If only Mistral key is available (no Gemini), skip straight to Mistral
+    if (!apiKey && mistralApiKey) {
+      console.log("No Gemini key — using Mistral AI directly");
+      const mistralModel = process.env.MISTRAL_MODEL || "mistral-small-latest";
+      const mistralMessages = [
+        { role: "system" as const, content: SYSTEM_PROMPT },
+        ...messages.map((msg: { role: string; content: string }) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        })),
+      ];
+
+      const mistralRes = await fetch(
+        "https://api.mistral.ai/v1/chat/completions",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${mistralApiKey}`,
+          },
+          body: JSON.stringify({
+            model: mistralModel,
+            messages: mistralMessages,
+            temperature: 0.7,
+            max_tokens: 2048,
+          }),
+        }
+      );
+
+      if (mistralRes.ok) {
+        const data = await mistralRes.json();
+        const msg = data.choices?.[0]?.message?.content;
+        if (msg) return NextResponse.json({ message: msg });
+      }
+
+      return NextResponse.json(
+        { error: "AI service failed. Please try again." },
+        { status: 500 }
+      );
     }
 
     // Build Gemini conversation history
@@ -130,12 +172,61 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ message: aiMessage });
     }
 
-    // All models failed
-    console.error("All Gemini models failed. Last error:", lastError);
+    // All Gemini models failed — try Mistral as fallback
+    const mistralKey = process.env.MISTRAL_API_KEY;
+    if (mistralKey) {
+      console.log("All Gemini models failed. Falling back to Mistral AI...");
+
+      const mistralModel = process.env.MISTRAL_MODEL || "mistral-small-latest";
+      const mistralMessages = [
+        { role: "system" as const, content: SYSTEM_PROMPT },
+        ...messages.map((msg: { role: string; content: string }) => ({
+          role: msg.role as "user" | "assistant",
+          content: msg.content,
+        })),
+      ];
+
+      try {
+        const mistralRes = await fetch(
+          "https://api.mistral.ai/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${mistralKey}`,
+            },
+            body: JSON.stringify({
+              model: mistralModel,
+              messages: mistralMessages,
+              temperature: 0.7,
+              max_tokens: 2048,
+            }),
+          }
+        );
+
+        if (mistralRes.ok) {
+          const mistralData = await mistralRes.json();
+          const mistralMessage =
+            mistralData.choices?.[0]?.message?.content;
+          if (mistralMessage) {
+            console.log(`Mistral (${mistralModel}) responded successfully`);
+            return NextResponse.json({ message: mistralMessage });
+          }
+        } else {
+          const errText = await mistralRes.text();
+          console.error("Mistral API error:", errText);
+        }
+      } catch (mistralErr) {
+        console.error("Mistral fallback failed:", mistralErr);
+      }
+    }
+
+    // All providers failed
+    console.error("All AI providers failed. Last error:", lastError);
     return NextResponse.json(
       {
         error:
-          "AI service is temporarily rate-limited. Please wait a minute and try again.",
+          "AI service is temporarily unavailable. Please wait a minute and try again.",
       },
       { status: 429 }
     );
