@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import {
   Send,
   Scale,
@@ -11,6 +11,8 @@ import {
   Check,
   Sparkles,
   ArrowLeft,
+  Trash2,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -21,6 +23,15 @@ interface Message {
   timestamp: Date;
 }
 
+interface ChatSession {
+  id: string;
+  title: string;
+  messages: Message[];
+  updatedAt: string;
+}
+
+const STORAGE_KEY = "nyayguru-chat-history";
+
 const suggestedQuestions = [
   "What are tenant rights in India?",
   "How to file a consumer complaint?",
@@ -30,17 +41,75 @@ const suggestedQuestions = [
   "Explain the Motor Vehicle Act",
 ];
 
+function loadChatSessions(): ChatSession[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveChatSessions(sessions: ChatSession[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+  } catch {
+    // Storage full or unavailable
+  }
+}
+
 export default function ChatPage() {
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
+  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  // Load sessions on mount
+  useEffect(() => {
+    const loaded = loadChatSessions();
+    setSessions(loaded);
+  }, []);
+
+  // Auto-scroll
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  // Save messages to current session
+  const saveCurrentSession = useCallback(
+    (msgs: Message[]) => {
+      if (msgs.length === 0) return;
+
+      const sessionId = currentSessionId || Date.now().toString();
+      const firstUserMsg = msgs.find((m) => m.role === "user");
+      const title = firstUserMsg
+        ? firstUserMsg.content.slice(0, 50) + (firstUserMsg.content.length > 50 ? "..." : "")
+        : "New Chat";
+
+      const updatedSession: ChatSession = {
+        id: sessionId,
+        title,
+        messages: msgs,
+        updatedAt: new Date().toISOString(),
+      };
+
+      setSessions((prev) => {
+        const filtered = prev.filter((s) => s.id !== sessionId);
+        const updated = [updatedSession, ...filtered].slice(0, 50); // Keep last 50
+        saveChatSessions(updated);
+        return updated;
+      });
+
+      if (!currentSessionId) setCurrentSessionId(sessionId);
+    },
+    [currentSessionId]
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,7 +155,11 @@ export default function ChatPage() {
         timestamp: new Date(),
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      setMessages((prev) => {
+        const updated = [...prev, assistantMessage];
+        saveCurrentSession(updated);
+        return updated;
+      });
     } catch {
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
@@ -95,7 +168,11 @@ export default function ChatPage() {
           "⚠️ Network error. Please check your internet connection and try again.",
         timestamp: new Date(),
       };
-      setMessages((prev) => [...prev, errorMessage]);
+      setMessages((prev) => {
+        const updated = [...prev, errorMessage];
+        saveCurrentSession(updated);
+        return updated;
+      });
     } finally {
       setIsLoading(false);
     }
@@ -115,6 +192,31 @@ export default function ChatPage() {
   const handleNewChat = () => {
     setMessages([]);
     setInput("");
+    setCurrentSessionId(null);
+    setShowHistory(false);
+  };
+
+  const handleLoadSession = (session: ChatSession) => {
+    setMessages(
+      session.messages.map((m) => ({
+        ...m,
+        timestamp: new Date(m.timestamp),
+      }))
+    );
+    setCurrentSessionId(session.id);
+    setShowHistory(false);
+  };
+
+  const handleDeleteSession = (sessionId: string) => {
+    setSessions((prev) => {
+      const updated = prev.filter((s) => s.id !== sessionId);
+      saveChatSessions(updated);
+      return updated;
+    });
+    if (currentSessionId === sessionId) {
+      setMessages([]);
+      setCurrentSessionId(null);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -155,11 +257,71 @@ export default function ChatPage() {
             <RotateCcw className="h-3.5 w-3.5" />
             New Chat
           </button>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+              showHistory
+                ? "bg-primary/10 text-primary"
+                : "text-muted-foreground hover:bg-muted hover:text-foreground"
+            }`}
+          >
+            <Clock className="h-3.5 w-3.5" />
+            History{sessions.length > 0 && ` (${sessions.length})`}
+          </button>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="flex flex-1 overflow-hidden">
+        {/* History Sidebar */}
+        {showHistory && (
+          <div className="w-72 shrink-0 overflow-y-auto border-r border-border bg-card p-3">
+            <h3 className="mb-3 px-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+              Chat History
+            </h3>
+            {sessions.length === 0 ? (
+              <p className="px-2 text-xs text-muted-foreground">
+                No previous chats yet.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {sessions.map((session) => (
+                  <div
+                    key={session.id}
+                    className={`group flex items-center justify-between rounded-lg px-3 py-2 text-sm transition-colors cursor-pointer ${
+                      currentSessionId === session.id
+                        ? "bg-primary/10 text-primary"
+                        : "text-card-foreground hover:bg-muted"
+                    }`}
+                    onClick={() => handleLoadSession(session)}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium">
+                        {session.title}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(session.updatedAt).toLocaleDateString()} ·{" "}
+                        {session.messages.length} msgs
+                      </p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteSession(session.id);
+                      }}
+                      className="ml-2 shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-red-500 group-hover:opacity-100"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Chat Content */}
+        <div className="flex-1 overflow-y-auto px-4 py-6">
         <div className="mx-auto max-w-4xl">
           {messages.length === 0 ? (
             // Empty State
@@ -271,6 +433,7 @@ export default function ChatPage() {
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {/* Input Area */}

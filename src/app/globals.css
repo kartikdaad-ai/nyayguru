@@ -37,7 +37,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not(.light) {
     --background: #0b1120;
     --foreground: #e2e8f0;
     --primary: #5b7bf9;
@@ -49,6 +49,19 @@
     --muted-foreground: #94a3b8;
     --border: #1e3050;
   }
+}
+
+:root.dark {
+  --background: #0b1120;
+  --foreground: #e2e8f0;
+  --primary: #5b7bf9;
+  --primary-dark: #4f6ef7;
+  --primary-light: #818cf8;
+  --card: #131b2e;
+  --card-foreground: #e2e8f0;
+  --muted: #1a2540;
+  --muted-foreground: #94a3b8;
+  --border: #1e3050;
 }
 
 body {
@@ -94,7 +107,7 @@ body {
 }
 
 @media (prefers-color-scheme: dark) {
-  .gradient-text {
+  :root:not(.light) .gradient-text {
     background: linear-gradient(135deg, #FF9933 0%, #e2e8f0 40%, #e2e8f0 60%, #22c55e 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
@@ -102,12 +115,23 @@ body {
   }
 }
 
+:root.dark .gradient-text {
+  background: linear-gradient(135deg, #FF9933 0%, #e2e8f0 40%, #e2e8f0 60%, #22c55e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
 .hero-gradient {
   background: linear-gradient(145deg, #eef2ff 0%, #f0f4ff 40%, #fef3c7 100%);
 }
 
 @media (prefers-color-scheme: dark) {
-  .hero-gradient {
+  :root:not(.light) .hero-gradient {
     background: linear-gradient(145deg, #0b1120 0%, #111d3a 40%, #151a2e 70%, #0f1629 100%);
   }
+}
+
+:root.dark .hero-gradient {
+  background: linear-gradient(145deg, #0b1120 0%, #111d3a 40%, #151a2e 70%, #0f1629 100%);
 }
