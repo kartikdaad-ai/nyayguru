@@ -20,6 +20,10 @@ import {
   Check,
   Download,
   X,
+  Search,
+  Hash,
+  ExternalLink,
+  Info,
 } from "lucide-react";
 
 interface AnalysisResult {
@@ -34,6 +38,28 @@ interface AnalysisResult {
   recommendation: string;
 }
 
+interface CaseLookupResult {
+  found: boolean;
+  source: string;
+  caseName?: string;
+  citation?: string;
+  court?: string;
+  date?: string;
+  bench?: string;
+  caseType?: string;
+  parties?: string;
+  facts?: string;
+  issues?: string;
+  laws?: string;
+  holding?: string;
+  significance?: string;
+  fullText?: string;
+  error?: string;
+  searchResults?: Array<{ id: string; title: string; snippet: string }>;
+}
+
+type InputMode = "upload" | "lookup";
+
 type AnalysisStep = {
   id: string;
   label: string;
@@ -42,6 +68,7 @@ type AnalysisStep = {
 };
 
 export default function CaseAnalyzerPage() {
+  const [inputMode, setInputMode] = useState<InputMode>("upload");
   const [caseText, setCaseText] = useState("");
   const [fileName, setFileName] = useState("");
   const [clientSide, setClientSide] = useState<"petitioner" | "respondent">(
@@ -51,6 +78,13 @@ export default function CaseAnalyzerPage() {
   const [court, setCourt] = useState("district");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+
+  // Case lookup state
+  const [lookupQuery, setLookupQuery] = useState("");
+  const [isLookingUp, setIsLookingUp] = useState(false);
+  const [lookupResult, setLookupResult] = useState<CaseLookupResult | null>(null);
+  const [lookupError, setLookupError] = useState("");
+
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
     new Set([
       "caseSummary",
@@ -93,6 +127,96 @@ export default function CaseAnalyzerPage() {
     setFileName("");
     setCaseText("");
     if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
+  const handleCaseLookup = async () => {
+    if (!lookupQuery.trim()) return;
+
+    setIsLookingUp(true);
+    setLookupError("");
+    setLookupResult(null);
+
+    try {
+      const res = await fetch("/api/case-lookup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: lookupQuery.trim(),
+          source: "auto",
+        }),
+      });
+
+      const data = await res.json();
+
+      if (data.error && !data.found) {
+        setLookupError(data.error);
+      } else {
+        setLookupResult(data);
+      }
+    } catch {
+      setLookupError("Failed to look up case. Please try again.");
+    } finally {
+      setIsLookingUp(false);
+    }
+  };
+
+  const useLookupForAnalysis = () => {
+    if (!lookupResult) return;
+
+    // Build comprehensive case text from lookup result
+    const parts: string[] = [];
+
+    if (lookupResult.caseName) parts.push(`Case: ${lookupResult.caseName}`);
+    if (lookupResult.citation) parts.push(`Citation: ${lookupResult.citation}`);
+    if (lookupResult.court) parts.push(`Court: ${lookupResult.court}`);
+    if (lookupResult.date) parts.push(`Date: ${lookupResult.date}`);
+    if (lookupResult.bench) parts.push(`Bench: ${lookupResult.bench}`);
+    if (lookupResult.parties) parts.push(`\nParties:\n${lookupResult.parties}`);
+    if (lookupResult.facts) parts.push(`\nFacts:\n${lookupResult.facts}`);
+    if (lookupResult.issues) parts.push(`\nLegal Issues:\n${lookupResult.issues}`);
+    if (lookupResult.laws) parts.push(`\nApplicable Laws:\n${lookupResult.laws}`);
+    if (lookupResult.holding) parts.push(`\nHolding/Judgment:\n${lookupResult.holding}`);
+    if (lookupResult.significance) parts.push(`\nSignificance:\n${lookupResult.significance}`);
+
+    // Use fullText if available and parts are minimal
+    const assembled = parts.join("\n");
+    const textToUse = lookupResult.fullText && assembled.length < 500
+      ? lookupResult.fullText
+      : assembled + (lookupResult.fullText ? `\n\nDetailed Narrative:\n${lookupResult.fullText}` : "");
+
+    setCaseText(textToUse);
+    setInputMode("upload"); // Switch to upload mode to show the text
+    setLookupResult(null);
+
+    // Auto-detect case type from lookup
+    if (lookupResult.caseType) {
+      const typeMap: Record<string, string> = {
+        criminal: "criminal",
+        civil: "civil",
+        constitutional: "constitutional",
+        family: "family",
+        property: "property",
+        consumer: "consumer",
+        labour: "labour",
+        corporate: "corporate",
+        tax: "tax",
+        other: "other",
+      };
+      const detectedType = typeMap[lookupResult.caseType.toLowerCase()] || "other";
+      setCaseType(detectedType);
+    }
+
+    // Auto-detect court level
+    if (lookupResult.court) {
+      const courtLower = lookupResult.court.toLowerCase();
+      if (courtLower.includes("supreme")) setCourt("supreme-court");
+      else if (courtLower.includes("high")) setCourt("high-court");
+      else if (courtLower.includes("tribunal")) setCourt("tribunal");
+      else if (courtLower.includes("consumer")) setCourt("consumer-forum");
+      else if (courtLower.includes("family")) setCourt("family-court");
+      else if (courtLower.includes("session")) setCourt("sessions");
+      else if (courtLower.includes("labour")) setCourt("labour-court");
+    }
   };
 
   const toggleSection = (section: string) => {
@@ -290,84 +414,384 @@ It does not constitute formal legal advice. Please review with a qualified advoc
             {/* Left: Input */}
             <div className="lg:col-span-3">
               <div className="rounded-2xl border border-border bg-card p-6">
-                <h2 className="mb-1 text-xl font-bold text-card-foreground">
-                  Upload Your Case
-                </h2>
-                <p className="mb-6 text-sm text-muted-foreground">
-                  Paste case details or upload a document. Our AI will analyze
-                  it end-to-end and prepare court-ready arguments.
-                </p>
+                {/* Input Mode Toggle */}
+                <div className="mb-6 flex rounded-xl border border-border bg-muted/50 p-1">
+                  <button
+                    onClick={() => setInputMode("upload")}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+                      inputMode === "upload"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Upload className="h-4 w-4" />
+                    Upload / Paste Case
+                  </button>
+                  <button
+                    onClick={() => setInputMode("lookup")}
+                    className={`flex flex-1 items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition-all ${
+                      inputMode === "lookup"
+                        ? "bg-card text-foreground shadow-sm"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Search className="h-4 w-4" />
+                    Lookup by Case ID
+                  </button>
+                </div>
 
-                {/* File Upload */}
-                <div className="mb-4">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    accept=".txt,.pdf,.doc,.docx"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    id="case-file"
-                  />
-                  {fileName ? (
-                    <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <FileText className="h-5 w-5 text-primary" />
-                        <span className="text-sm font-medium text-card-foreground">
-                          {fileName}
-                        </span>
-                      </div>
-                      <button
-                        onClick={removeFile}
-                        className="rounded-lg p-1 text-muted-foreground hover:text-foreground"
-                      >
-                        <X className="h-4 w-4" />
-                      </button>
+                {inputMode === "upload" ? (
+                  <>
+                    <h2 className="mb-1 text-xl font-bold text-card-foreground">
+                      Upload Your Case
+                    </h2>
+                    <p className="mb-6 text-sm text-muted-foreground">
+                      Paste case details or upload a document. Our AI will analyze
+                      it end-to-end and prepare court-ready arguments.
+                    </p>
+
+                    {/* File Upload */}
+                    <div className="mb-4">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept=".txt,.pdf,.doc,.docx"
+                        onChange={handleFileUpload}
+                        className="hidden"
+                        id="case-file"
+                      />
+                      {fileName ? (
+                        <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/5 px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-5 w-5 text-primary" />
+                            <span className="text-sm font-medium text-card-foreground">
+                              {fileName}
+                            </span>
+                          </div>
+                          <button
+                            onClick={removeFile}
+                            className="rounded-lg p-1 text-muted-foreground hover:text-foreground"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ) : (
+                        <label
+                          htmlFor="case-file"
+                          className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border p-8 transition-colors hover:border-primary/40 hover:bg-primary/5"
+                        >
+                          <Upload className="h-8 w-8 text-muted-foreground" />
+                          <div className="text-center">
+                            <p className="text-sm font-medium text-card-foreground">
+                              Drop your case file here or click to upload
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Supports TXT, PDF, DOC, DOCX
+                            </p>
+                          </div>
+                        </label>
+                      )}
                     </div>
-                  ) : (
-                    <label
-                      htmlFor="case-file"
-                      className="flex cursor-pointer flex-col items-center gap-3 rounded-xl border-2 border-dashed border-border p-8 transition-colors hover:border-primary/40 hover:bg-primary/5"
-                    >
-                      <Upload className="h-8 w-8 text-muted-foreground" />
-                      <div className="text-center">
-                        <p className="text-sm font-medium text-card-foreground">
-                          Drop your case file here or click to upload
-                        </p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          Supports TXT, PDF, DOC, DOCX
-                        </p>
-                      </div>
-                    </label>
-                  )}
-                </div>
 
-                {/* Divider */}
-                <div className="my-4 flex items-center gap-3">
-                  <div className="h-px flex-1 bg-border" />
-                  <span className="text-xs text-muted-foreground">
-                    or paste case details below
-                  </span>
-                  <div className="h-px flex-1 bg-border" />
-                </div>
+                    {/* Divider */}
+                    <div className="my-4 flex items-center gap-3">
+                      <div className="h-px flex-1 bg-border" />
+                      <span className="text-xs text-muted-foreground">
+                        or paste case details below
+                      </span>
+                      <div className="h-px flex-1 bg-border" />
+                    </div>
 
-                {/* Text Input */}
-                <textarea
-                  value={caseText}
-                  onChange={(e) => setCaseText(e.target.value)}
-                  placeholder="Paste the complete case details here — FIR copy, charge sheet, case history, facts, or any legal document text...
+                    {/* Text Input */}
+                    <textarea
+                      value={caseText}
+                      onChange={(e) => setCaseText(e.target.value)}
+                      placeholder="Paste the complete case details here — FIR copy, charge sheet, case history, facts, or any legal document text...
 
 Example:
 Case No. 123/2024 — Ram vs. Shyam
 Filed under Section 420 IPC (now Section 318 BNS)
 Facts: The complainant Ram alleges that the accused Shyam...
 Prior history: The matter was first heard on..."
-                  rows={12}
-                  className="w-full resize-none rounded-xl border border-border bg-background p-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
-                />
+                      rows={12}
+                      className="w-full resize-none rounded-xl border border-border bg-background p-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                    />
 
-                <p className="mt-2 text-right text-xs text-muted-foreground">
-                  {caseText.length.toLocaleString()} characters
-                </p>
+                    <p className="mt-2 text-right text-xs text-muted-foreground">
+                      {caseText.length.toLocaleString()} characters
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    {/* CASE LOOKUP MODE */}
+                    <h2 className="mb-1 text-xl font-bold text-card-foreground">
+                      <Hash className="mr-2 inline h-5 w-5 text-primary" />
+                      Look Up Case by ID
+                    </h2>
+                    <p className="mb-6 text-sm text-muted-foreground">
+                      Enter a case name, citation, CNR number, or any case identifier.
+                      Our AI will fetch the details and auto-populate the analyzer.
+                    </p>
+
+                    {/* Search Input */}
+                    <div className="mb-4">
+                      <div className="relative">
+                        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
+                        <input
+                          type="text"
+                          value={lookupQuery}
+                          onChange={(e) => setLookupQuery(e.target.value)}
+                          onKeyDown={(e) => e.key === "Enter" && handleCaseLookup()}
+                          placeholder="Enter case name, citation, or CNR number..."
+                          className="w-full rounded-xl border border-border bg-background py-3.5 pl-12 pr-4 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quick Examples */}
+                    <div className="mb-6">
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">
+                        Try these examples:
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          "Kesavananda Bharati vs State of Kerala",
+                          "K.S. Puttaswamy vs Union of India",
+                          "Maneka Gandhi vs Union of India",
+                          "Shayara Bano vs Union of India",
+                          "Vishaka vs State of Rajasthan",
+                        ].map((example) => (
+                          <button
+                            key={example}
+                            onClick={() => setLookupQuery(example)}
+                            className="rounded-lg border border-border bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground"
+                          >
+                            {example}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Search Button */}
+                    <button
+                      onClick={handleCaseLookup}
+                      disabled={!lookupQuery.trim() || isLookingUp}
+                      className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {isLookingUp ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Searching Case Database...
+                        </>
+                      ) : (
+                        <>
+                          <Search className="h-4 w-4" />
+                          Look Up Case
+                        </>
+                      )}
+                    </button>
+
+                    {/* Lookup Error */}
+                    {lookupError && (
+                      <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/5 p-4">
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-500" />
+                          <p className="text-sm text-red-600 dark:text-red-400">
+                            {lookupError}
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Lookup Result */}
+                    {lookupResult && lookupResult.found && (
+                      <div className="mt-6 space-y-4">
+                        {/* Case Header */}
+                        <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-5">
+                          <div className="mb-3 flex items-start justify-between">
+                            <div className="flex items-center gap-2">
+                              <Check className="h-5 w-5 text-green-500" />
+                              <span className="text-sm font-semibold text-green-700 dark:text-green-400">
+                                Case Found
+                              </span>
+                              <span className="rounded-full border border-border bg-muted px-2 py-0.5 text-[10px] font-medium uppercase text-muted-foreground">
+                                {lookupResult.source === "indiankanoon" ? "Indian Kanoon" : "AI Search"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <h3 className="mb-2 text-lg font-bold text-foreground">
+                            {lookupResult.caseName}
+                          </h3>
+
+                          <div className="space-y-1.5 text-sm text-muted-foreground">
+                            {lookupResult.citation && (
+                              <p>
+                                <span className="font-medium text-foreground">Citation:</span>{" "}
+                                {lookupResult.citation}
+                              </p>
+                            )}
+                            {lookupResult.court && (
+                              <p>
+                                <span className="font-medium text-foreground">Court:</span>{" "}
+                                {lookupResult.court}
+                              </p>
+                            )}
+                            {lookupResult.date && (
+                              <p>
+                                <span className="font-medium text-foreground">Date:</span>{" "}
+                                {lookupResult.date}
+                              </p>
+                            )}
+                            {lookupResult.bench && (
+                              <p>
+                                <span className="font-medium text-foreground">Bench:</span>{" "}
+                                {lookupResult.bench}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Case Details Preview */}
+                        {lookupResult.facts && (
+                          <div className="rounded-xl border border-border bg-background p-4">
+                            <h4 className="mb-2 text-sm font-semibold text-foreground">
+                              Key Facts
+                            </h4>
+                            <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+                              {lookupResult.facts}
+                            </p>
+                          </div>
+                        )}
+
+                        {lookupResult.holding && (
+                          <div className="rounded-xl border border-border bg-background p-4">
+                            <h4 className="mb-2 text-sm font-semibold text-foreground">
+                              Judgment / Holding
+                            </h4>
+                            <p className="line-clamp-4 text-sm leading-relaxed text-muted-foreground">
+                              {lookupResult.holding}
+                            </p>
+                          </div>
+                        )}
+
+                        {lookupResult.significance && (
+                          <div className="rounded-xl border border-border bg-background p-4">
+                            <h4 className="mb-2 text-sm font-semibold text-foreground">
+                              Significance
+                            </h4>
+                            <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+                              {lookupResult.significance}
+                            </p>
+                          </div>
+                        )}
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-3">
+                          <button
+                            onClick={useLookupForAnalysis}
+                            className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-purple-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition-all hover:shadow-xl"
+                          >
+                            <Sparkles className="h-4 w-4" />
+                            Use for Case Analysis
+                          </button>
+                          <button
+                            onClick={() => {
+                              const text = lookupResult.fullText || lookupResult.facts || "";
+                              navigator.clipboard.writeText(text);
+                            }}
+                            className="flex items-center gap-2 rounded-xl border border-border px-4 py-3 text-sm font-medium text-foreground hover:bg-muted"
+                          >
+                            <Copy className="h-4 w-4" />
+                            Copy
+                          </button>
+                        </div>
+
+                        {/* Search Results (if from Indian Kanoon) */}
+                        {lookupResult.searchResults && lookupResult.searchResults.length > 1 && (
+                          <div className="rounded-xl border border-border bg-background p-4">
+                            <h4 className="mb-3 text-sm font-semibold text-foreground">
+                              Other Matching Cases
+                            </h4>
+                            <div className="space-y-2">
+                              {lookupResult.searchResults.slice(1, 5).map((sr) => (
+                                <button
+                                  key={sr.id}
+                                  onClick={() => {
+                                    setLookupQuery(sr.title);
+                                    handleCaseLookup();
+                                  }}
+                                  className="flex w-full items-start gap-2 rounded-lg p-2.5 text-left transition-colors hover:bg-muted"
+                                >
+                                  <ExternalLink className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                                  <div>
+                                    <p className="text-sm font-medium text-foreground">
+                                      {sr.title}
+                                    </p>
+                                    {sr.snippet && (
+                                      <p className="mt-0.5 line-clamp-1 text-xs text-muted-foreground">
+                                        {sr.snippet}
+                                      </p>
+                                    )}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Lookup Result - Not Found */}
+                    {lookupResult && !lookupResult.found && (
+                      <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/5 p-4">
+                        <div className="flex items-start gap-2">
+                          <Info className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                          <div>
+                            <p className="text-sm font-medium text-foreground">
+                              Case not found
+                            </p>
+                            <p className="mt-1 text-sm text-muted-foreground">
+                              Could not find detailed information for this case. Try:
+                            </p>
+                            <ul className="mt-2 list-disc space-y-1 pl-4 text-sm text-muted-foreground">
+                              <li>Using the full case name (e.g., &quot;Ram vs. Shyam&quot;)</li>
+                              <li>Adding the year (e.g., &quot;Ram vs. Shyam 2023&quot;)</li>
+                              <li>Using the citation (e.g., &quot;(2023) 5 SCC 123&quot;)</li>
+                              <li>Using a well-known case description</li>
+                            </ul>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Info Box */}
+                    <div className="mt-6 rounded-xl border border-border bg-muted/30 p-4">
+                      <h4 className="mb-2 flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <Info className="h-4 w-4 text-primary" />
+                        Supported Case Identifiers
+                      </h4>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5 text-xs text-muted-foreground">
+                          <p className="font-medium text-foreground">Case Name</p>
+                          <p>e.g., &quot;Kesavananda Bharati vs State of Kerala&quot;</p>
+                        </div>
+                        <div className="space-y-1.5 text-xs text-muted-foreground">
+                          <p className="font-medium text-foreground">Case Citation</p>
+                          <p>e.g., &quot;(2017) 10 SCC 1&quot; or &quot;AIR 2020 SC 1234&quot;</p>
+                        </div>
+                        <div className="space-y-1.5 text-xs text-muted-foreground">
+                          <p className="font-medium text-foreground">Case Number</p>
+                          <p>e.g., &quot;Criminal Appeal No. 123/2020&quot;</p>
+                        </div>
+                        <div className="space-y-1.5 text-xs text-muted-foreground">
+                          <p className="font-medium text-foreground">Popular Name</p>
+                          <p>e.g., &quot;Triple Talaq case&quot; or &quot;Aadhaar verdict&quot;</p>
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

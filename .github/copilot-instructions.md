@@ -24,7 +24,10 @@
 - Use `@/` import alias for `src/` directory
 
 ## Key Features
-- AI-powered legal chat for Indian law (OpenAI integration)
+- AI-powered legal chat for Indian law (Gemini + Mistral AI)
+- AI Case Analyzer — 9-section court-ready analysis
+- Case Lookup by ID — search by case name, citation, CNR number, or popular name
+- Indian Kanoon API integration (optional, for enhanced case lookup)
 - Demo mode works without API key (built-in demo responses)
 - Multi-language support (Hindi, English, and other Indian languages)
 - Document upload and OCR analysis (UI ready)
@@ -32,6 +35,8 @@
 - Legal drafting assistance
 - Privacy-first architecture
 - Responsive design with dark/light mode support
+- NextAuth.js authentication (login/signup)
+- Chat history persistence (localStorage)
 - Voice input support (UI ready)
 
 ## Environment Variables
@@ -39,3 +44,4 @@
 - `GEMINI_MODEL` — Model to use (default: gemini-2.5-flash)
 - `MISTRAL_API_KEY` — Mistral AI API key as fallback provider (free at https://console.mistral.ai/api-keys)
 - `MISTRAL_MODEL` — Mistral model to use (default: mistral-small-latest)
+- `INDIAN_KANOON_TOKEN` — Indian Kanoon API token for enhanced case lookup (optional, sign up at https://api.indiankanoon.org/)
