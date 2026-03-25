@@ -78,6 +78,7 @@ export default function CaseAnalyzerPage() {
   const [court, setCourt] = useState("district");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [analyzeError, setAnalyzeError] = useState("");
 
   // Case lookup state
   const [lookupQuery, setLookupQuery] = useState("");
@@ -327,6 +328,7 @@ It does not constitute formal legal advice. Please review with a qualified advoc
 
     setIsAnalyzing(true);
     setResult(null);
+    setAnalyzeError("");
     setSteps((prev) => prev.map((s) => ({ ...s, status: "pending" as const })));
 
     // Run step animation and API call in parallel
@@ -346,9 +348,23 @@ It does not constitute formal legal advice. Please review with a qualified advoc
 
       const data = await res.json();
       await stepsPromise; // Wait for step animation to finish
+
+      // Check for API-level errors
+      if (data.error) {
+        setAnalyzeError(data.error);
+        setResult(null);
+        return;
+      }
+
+      // Check if it's a demo with an error message
+      if (data._isDemo && data._error) {
+        setAnalyzeError(data._error);
+      }
+
       // Normalize: Mistral sometimes returns arrays instead of strings
       const normalized: Record<string, string> = {};
       for (const key of Object.keys(data)) {
+        if (key.startsWith('_')) continue; // skip internal fields
         const val = data[key];
         if (Array.isArray(val)) {
           normalized[key] = val.map((item: unknown) => {
@@ -365,9 +381,13 @@ It does not constitute formal legal advice. Please review with a qualified advoc
         }
       }
       setResult(normalized as unknown as AnalysisResult);
-    } catch {
+    } catch (err) {
       await stepsPromise;
       setResult(null);
+      setAnalyzeError(
+        "Analysis failed. The AI service may be temporarily unavailable or rate-limited. Please wait a moment and try again."
+      );
+      console.error("Case analyzer error:", err);
     } finally {
       setIsAnalyzing(false);
     }
@@ -949,6 +969,30 @@ Prior history: The matter was first heard on..."
                           </span>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Analysis Error */}
+                {analyzeError && !isAnalyzing && (
+                  <div className="rounded-2xl border border-red-500/30 bg-red-500/5 p-6">
+                    <div className="flex items-start gap-3">
+                      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-500" />
+                      <div>
+                        <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">
+                          Analysis Failed
+                        </h3>
+                        <p className="mt-1 text-sm text-red-600 dark:text-red-300">
+                          {analyzeError}
+                        </p>
+                        <button
+                          onClick={handleAnalyze}
+                          disabled={!caseText.trim()}
+                          className="mt-3 rounded-lg bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 disabled:opacity-50"
+                        >
+                          Try Again
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

@@ -173,7 +173,7 @@ Analyze this case completely and return the JSON response.`;
               { role: "user", content: userMessage },
             ],
             temperature: 0.4,
-            max_tokens: 8192,
+            max_tokens: 16384,
             response_format: { type: "json_object" },
           }),
         }
@@ -230,7 +230,7 @@ Analyze this case completely and return the JSON response.`;
             ],
             generationConfig: {
               temperature: 0.4,
-              maxOutputTokens: 8192,
+              maxOutputTokens: 65536,
               responseMimeType: "application/json",
             },
           }),
@@ -292,7 +292,7 @@ Analyze this case completely and return the JSON response.`;
                 { role: "user", content: userMessage },
               ],
               temperature: 0.4,
-              max_tokens: 8192,
+              max_tokens: 16384,
               response_format: { type: "json_object" },
             }),
           }
