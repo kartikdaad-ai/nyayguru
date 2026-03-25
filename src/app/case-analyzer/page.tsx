@@ -346,7 +346,25 @@ It does not constitute formal legal advice. Please review with a qualified advoc
 
       const data = await res.json();
       await stepsPromise; // Wait for step animation to finish
-      setResult(data);
+      // Normalize: Mistral sometimes returns arrays instead of strings
+      const normalized: Record<string, string> = {};
+      for (const key of Object.keys(data)) {
+        const val = data[key];
+        if (Array.isArray(val)) {
+          normalized[key] = val.map((item: unknown) => {
+            if (typeof item === 'string') return item;
+            if (typeof item === 'object' && item !== null) {
+              return Object.entries(item).map(([k, v]) => `${k}: ${v}`).join('\n');
+            }
+            return String(item);
+          }).join('\n\n');
+        } else if (typeof val === 'string') {
+          normalized[key] = val;
+        } else {
+          normalized[key] = String(val ?? '');
+        }
+      }
+      setResult(normalized as unknown as AnalysisResult);
     } catch {
       await stepsPromise;
       setResult(null);
@@ -1021,8 +1039,10 @@ Prior history: The matter was first heard on..."
             {/* Result Sections */}
             <div className="space-y-4">
               {resultSections.map(({ key, title, icon: Icon, color }) => {
-                const content = result[key];
-                if (!content) return null;
+                const rawContent = result[key];
+                if (!rawContent) return null;
+                // Ensure content is always a string (safety for edge cases)
+                const content = typeof rawContent === 'string' ? rawContent : Array.isArray(rawContent) ? (rawContent as unknown[]).map((item: unknown) => typeof item === 'object' && item !== null ? Object.entries(item).map(([k, v]) => `${k}: ${v}`).join('\n') : String(item)).join('\n\n') : String(rawContent);
                 const isExpanded = expandedSections.has(key);
 
                 return (

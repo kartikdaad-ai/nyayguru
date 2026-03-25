@@ -98,6 +98,31 @@ Provide strategic advice to the lawyer including:
 - Return ONLY valid JSON, no markdown code blocks
 - Every section must have substantial content (minimum 150 words each)`;
 
+// Helper: normalize AI response — convert arrays to formatted strings
+function normalizeAnalysisResult(parsed: Record<string, unknown>): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const [key, val] of Object.entries(parsed)) {
+    if (typeof val === "string") {
+      result[key] = val;
+    } else if (Array.isArray(val)) {
+      result[key] = val
+        .map((item: unknown) => {
+          if (typeof item === "string") return item;
+          if (typeof item === "object" && item !== null) {
+            return Object.entries(item as Record<string, unknown>)
+              .map(([k, v]) => `**${k}:** ${v}`)
+              .join("\n");
+          }
+          return String(item);
+        })
+        .join("\n\n");
+    } else {
+      result[key] = String(val ?? "");
+    }
+  }
+  return result;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
@@ -160,7 +185,10 @@ Analyze this case completely and return the JSON response.`;
         if (content) {
           try {
             const cleaned = content.replace(/```json\n?|```\n?/g, "").trim();
-            return NextResponse.json(JSON.parse(cleaned));
+            const parsed = JSON.parse(cleaned);
+            // Normalize: convert any arrays to formatted strings
+            const normalized = normalizeAnalysisResult(parsed);
+            return NextResponse.json(normalized);
           } catch {
             console.error("Failed to parse Mistral response");
           }
@@ -281,7 +309,8 @@ Analyze this case completely and return the JSON response.`;
                 .trim();
               const parsed = JSON.parse(cleaned);
               console.log(`Mistral (${mistralModel}) case analysis succeeded`);
-              return NextResponse.json(parsed);
+              const normalized = normalizeAnalysisResult(parsed);
+              return NextResponse.json(normalized);
             } catch {
               console.error("Failed to parse Mistral response:", mistralContent);
             }
