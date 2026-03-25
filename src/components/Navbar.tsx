@@ -128,10 +128,10 @@ export function Navbar() {
                   Log In
                 </Link>
                 <Link
-                  href="/chat"
+                  href="/auth/signup"
                   className="rounded-lg bg-primary px-5 py-2 text-sm font-medium text-white transition-colors hover:bg-primary-dark"
                 >
-                  Start Free →
+                  Sign Up
                 </Link>
               </>
             )}
@@ -188,7 +188,7 @@ export function Navbar() {
               ) : (
                 <>
                   <Link href="/auth/login" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-foreground hover:bg-muted">Log In</Link>
-                  <Link href="/chat" onClick={() => setIsOpen(false)} className="mx-4 rounded-lg bg-primary px-5 py-2 text-center text-sm font-medium text-white hover:bg-primary-dark">Start Free →</Link>
+                  <Link href="/auth/signup" onClick={() => setIsOpen(false)} className="mx-4 rounded-lg bg-primary px-5 py-2 text-center text-sm font-medium text-white hover:bg-primary-dark">Sign Up</Link>
                 </>
               )}
             </div>
