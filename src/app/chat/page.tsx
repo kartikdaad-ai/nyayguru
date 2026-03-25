@@ -15,6 +15,7 @@ import {
   Clock,
 } from "lucide-react";
 import Link from "next/link";
+import { useSession } from "next-auth/react";
 
 interface Message {
   id: string;
@@ -30,7 +31,16 @@ interface ChatSession {
   updatedAt: string;
 }
 
-const STORAGE_KEY = "nyayguru-chat-history";
+const STORAGE_KEY_PREFIX = "nyayguru-chat-history";
+
+function getStorageKey(userEmail: string | null | undefined): string {
+  if (userEmail) {
+    // Create a user-specific key using their email
+    return `${STORAGE_KEY_PREFIX}-${userEmail}`;
+  }
+  // Guest users get their own separate key
+  return `${STORAGE_KEY_PREFIX}-guest`;
+}
 
 const suggestedQuestions = [
   "What are tenant rights in India?",
@@ -41,25 +51,28 @@ const suggestedQuestions = [
   "Explain the Motor Vehicle Act",
 ];
 
-function loadChatSessions(): ChatSession[] {
+function loadChatSessions(storageKey: string): ChatSession[] {
   if (typeof window === "undefined") return [];
   try {
-    const stored = localStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(storageKey);
     return stored ? JSON.parse(stored) : [];
   } catch {
     return [];
   }
 }
 
-function saveChatSessions(sessions: ChatSession[]) {
+function saveChatSessions(sessions: ChatSession[], storageKey: string) {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(sessions));
+    localStorage.setItem(storageKey, JSON.stringify(sessions));
   } catch {
     // Storage full or unavailable
   }
 }
 
 export default function ChatPage() {
+  const { data: authSession } = useSession();
+  const storageKey = getStorageKey(authSession?.user?.email);
+
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
@@ -70,11 +83,40 @@ export default function ChatPage() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
-  // Load sessions on mount
+  // Migrate old shared history to user-specific key (one-time)
   useEffect(() => {
-    const loaded = loadChatSessions();
+    if (typeof window === "undefined") return;
+    const OLD_KEY = "nyayguru-chat-history";
+    const oldData = localStorage.getItem(OLD_KEY);
+    if (oldData && storageKey !== OLD_KEY) {
+      try {
+        const oldSessions: ChatSession[] = JSON.parse(oldData);
+        if (oldSessions.length > 0) {
+          // Merge old sessions into user-specific storage
+          const existing = loadChatSessions(storageKey);
+          const existingIds = new Set(existing.map((s) => s.id));
+          const newSessions = oldSessions.filter((s) => !existingIds.has(s.id));
+          if (newSessions.length > 0) {
+            const merged = [...newSessions, ...existing].slice(0, 50);
+            saveChatSessions(merged, storageKey);
+          }
+        }
+      } catch {
+        // Ignore migration errors
+      }
+      // Remove old shared key to prevent cross-user leakage
+      localStorage.removeItem(OLD_KEY);
+    }
+  }, [storageKey]);
+
+  // Load sessions on mount or when user changes
+  useEffect(() => {
+    const loaded = loadChatSessions(storageKey);
     setSessions(loaded);
-  }, []);
+    // Reset current chat when user changes
+    setMessages([]);
+    setCurrentSessionId(null);
+  }, [storageKey]);
 
   // Auto-scroll
   useEffect(() => {
@@ -102,13 +144,13 @@ export default function ChatPage() {
       setSessions((prev) => {
         const filtered = prev.filter((s) => s.id !== sessionId);
         const updated = [updatedSession, ...filtered].slice(0, 50); // Keep last 50
-        saveChatSessions(updated);
+        saveChatSessions(updated, storageKey);
         return updated;
       });
 
       if (!currentSessionId) setCurrentSessionId(sessionId);
     },
-    [currentSessionId]
+    [currentSessionId, storageKey]
   );
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -210,7 +252,7 @@ export default function ChatPage() {
   const handleDeleteSession = (sessionId: string) => {
     setSessions((prev) => {
       const updated = prev.filter((s) => s.id !== sessionId);
-      saveChatSessions(updated);
+      saveChatSessions(updated, storageKey);
       return updated;
     });
     if (currentSessionId === sessionId) {
