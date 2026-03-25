@@ -30,7 +30,7 @@ export function Footer() {
             <ul className="space-y-2">
               <li>
                 <Link
-                  href="#features"
+                  href="/#features"
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   Features
@@ -38,7 +38,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="#how-it-works"
+                  href="/#how-it-works"
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   How It Works
@@ -46,7 +46,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="#pricing"
+                  href="/#pricing"
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   Pricing
@@ -63,7 +63,7 @@ export function Footer() {
             <ul className="space-y-2">
               <li>
                 <Link
-                  href="#faq"
+                  href="/#faq"
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   FAQs
@@ -71,7 +71,7 @@ export function Footer() {
               </li>
               <li>
                 <Link
-                  href="#testimonials"
+                  href="/#testimonials"
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
                   Reviews

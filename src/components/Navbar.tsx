@@ -38,31 +38,31 @@ export function Navbar() {
               ⭐ Case Analyzer
             </Link>
             <Link
-              href="#features"
+              href="/#features"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Features
             </Link>
             <Link
-              href="#how-it-works"
+              href="/#how-it-works"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               How It Works
             </Link>
             <Link
-              href="#testimonials"
+              href="/#testimonials"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Testimonials
             </Link>
             <Link
-              href="#pricing"
+              href="/#pricing"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               Pricing
             </Link>
             <Link
-              href="#faq"
+              href="/#faq"
               className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
             >
               FAQ
@@ -163,11 +163,11 @@ export function Navbar() {
           <div className="border-t border-border pb-4 md:hidden">
             <div className="flex flex-col gap-2 pt-4">
               <Link href="/case-analyzer" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-semibold text-saffron hover:bg-muted">⭐ Case Analyzer</Link>
-              <Link href="#features" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Features</Link>
-              <Link href="#how-it-works" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">How It Works</Link>
-              <Link href="#testimonials" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Testimonials</Link>
-              <Link href="#pricing" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Pricing</Link>
-              <Link href="#faq" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">FAQ</Link>
+              <Link href="/#features" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Features</Link>
+              <Link href="/#how-it-works" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">How It Works</Link>
+              <Link href="/#testimonials" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Testimonials</Link>
+              <Link href="/#pricing" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">Pricing</Link>
+              <Link href="/#faq" onClick={() => setIsOpen(false)} className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground hover:bg-muted">FAQ</Link>
               <hr className="my-2 border-border" />
               {session ? (
                 <>
